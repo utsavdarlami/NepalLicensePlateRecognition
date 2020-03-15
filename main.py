@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
 import sys
-
+from datetime import datetime 
 
 # Darkflow TFNet used to create our plate detection model by loading trained weights
 options = {"pbLoad": "../yolo-1c.pb", "metaLoad":"../yolo-1c.meta", "gpu": 0.9} 
@@ -33,7 +33,7 @@ def nepaliCharIs(predictImage):
     _,threshImage = cv2.threshold(grayImage,40,255,cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     resize_image = cv2.resize(threshImage,(32,32),interpolation= cv2.INTER_CUBIC)  
     resize_image = resize_image.reshape(32,32,1)
-    predictArray  =np.array([resize_image/255])
+    predictArray  =np.array([resize_image/255]) # normalizing 0 to 1 
     modelPrediction  = nlpCharModel.predict(predictArray)
 #     print(modelPrediction[0])
     return arrayOfDevnagariChar[np.argmax(modelPrediction[0])]
@@ -138,6 +138,7 @@ def computeFrame(frame):
         licensePlate.append(opencvReadPlate(firstCropImg))
 
         print("Extracted Plate : " + licensePlate[0])
+        return licensePlate[0]
 
     except Exception as e:
         print(e)
@@ -158,6 +159,13 @@ def image_fed(imagePath):
 def video_fed(videoPath):
     cap = cv2.VideoCapture(videoPath)
     counter=0
+    d = datetime.now()
+    fileName = str(d.year)+"_"+str(d.month)+"_"+str(d.day)+".csv"
+
+    if os.path.isfile(fileName):
+        logDf = pd.read_csv(fileName)
+    else:
+        logDf = pd.DataFrame(columns=["Time","Plate Number"])
 
     while(cap.isOpened()):
         ret, frame = cap.read()
@@ -167,7 +175,14 @@ def video_fed(videoPath):
             frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
             if counter%6== 0:
-                computeFrame(frame)
+                dnow = datetime.now()
+                
+                plate =  computeFrame(frame)
+                time= str(dnow.hour)+"-"+str(dnow.minute)+"-"+str(dnow.second)
+
+                aDic = {"Time":time,"Plate Number":plate}
+                logDf = logDf.append(aDic,ignore_index=True)
+
             counter+=1
 
             cv2.namedWindow('Video',cv2.WINDOW_NORMAL)
@@ -179,7 +194,8 @@ def video_fed(videoPath):
         else:
             cv2.waitKey(0)
             break
-    
+
+    logDf.to_csv(fileName,index=False)
     cap.release()
     cv2.destroyAllWindows()
 
